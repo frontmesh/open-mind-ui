@@ -40,7 +40,11 @@ update msg model =
             { model | newMessage = message, charCount = String.length message }
 
         SubmitMessage message ->
-            { model | newMessage = "", charCount = String.length message, messages = model.messages ++ [ message ] }
+            if String.isEmpty message then
+                model
+
+            else
+                { model | newMessage = "", charCount = 0, messages = model.messages ++ [ message ] }
 
 
 renderHeaderMenuButton : Html Msg
