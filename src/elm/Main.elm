@@ -75,7 +75,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         UpdateMessage message ->
-            ( { model | newMessage = message, charCount = String.length message }, Cmd.none )
+            ( { model | newMessage = message, charCount = String.length message, apiModal = False }, Cmd.none )
 
         SubmitMessage message ->
             if String.isEmpty message then
@@ -88,7 +88,7 @@ update msg model =
                 ( { model | apiModal = False, newMessage = "", charCount = 0, messages = model.messages ++ [ message ] }, Cmd.none )
 
         ApiKeyChanged key ->
-            ( { model | apikey = key }, Cmd.none )
+            ( { model | apikey = key, apiModal = True }, Cmd.none )
 
         ApiKeySubmitted ->
             if String.isEmpty model.apikey then
