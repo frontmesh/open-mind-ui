@@ -20,7 +20,7 @@ app.ports.setStorage.subscribe(function(val) {
   }
 
   // Report that the new session was stored successfully.
-  setTimeout(function() { app.ports.onStoreChange.send(val); }, 0);
+  // setTimeout(function() { app.ports.onStoreChange.send(val); }, 0);
 });
 
 // Whenever localStorage changes in another tab, report it if necessary.

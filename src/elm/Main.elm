@@ -1,12 +1,12 @@
 port module Main exposing (Model, Msg(..), main, update, view)
 
--- import Api exposing (ApiKey)
-
+import Api exposing (postCompletion)
 import Browser
 import Dict exposing (update)
 import Html exposing (Html, a, button, div, footer, h1, h3, input, label, li, main_, p, span, text, textarea, ul)
-import Html.Attributes exposing (checked, class, for, id, placeholder, type_, value)
+import Html.Attributes exposing (checked, class, for, href, id, placeholder, rel, target, type_, value)
 import Html.Events exposing (onClick, onInput)
+import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Svg exposing (path, svg)
@@ -30,6 +30,8 @@ type Msg
     | ApiKeyChanged String
     | ApiKeySubmitted
     | ToggleModal Bool
+    | SendApiKeyRequest
+    | GotCompletion (Result Http.Error String)
 
 
 type alias Model =
@@ -100,6 +102,12 @@ update msg model =
         ToggleModal state ->
             ( { model | apiModal = state }, Cmd.none )
 
+        SendApiKeyRequest ->
+            ( model, postCompletion model.apikey )
+
+        GotCompletion (Ok response) ->
+            ( model, Cmd.none )
+
 
 port setStorage : Encode.Value -> Cmd msg
 
@@ -154,22 +162,6 @@ renderDrawerMenu =
                 [ a [] [ text "Sidebar Item 2" ]
                 ]
             ]
-
-        -- , renderFooter
-        ]
-
-
-renderFooter : Html Msg
-renderFooter =
-    footer [ class "footer items-center p-4 bg-neutral text-neutral-content bottom-0 z-31 sticky" ]
-        [ p [] [ text "Made with Elm, Daisy UI, Vite and ❤️" ]
-        , div [ class "grid-flow-col gap-4 md:place-self-center md:justify-self-end" ]
-            [ a []
-                [ svg [ width "24", height "24", viewBox "0 0 24 24", Svg.Attributes.class "fill-current" ]
-                    [ path [ d "M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z" ] []
-                    ]
-                ]
-            ]
         ]
 
 
@@ -205,17 +197,35 @@ renderChatInput model =
         ]
 
 
-modal : Model -> Html Msg
-modal model =
+viewModal : Model -> Html Msg
+viewModal model =
     div []
         [ input [ type_ "checkbox", id "api-modal", class "modal-toggle", checked model.apiModal ] []
         , label [ for "api-modal", class "modal cursor-pointer" ]
             [ label [ class "modal-box relative", for "" ]
-                [ h3 [ class "text-lg font-bold" ] [ text "Set your api key" ]
-                , p [ class "py-4" ] [ text "You can get your api key from https://openai.com" ]
+                [ h3 [ class "text-lg font-bold" ] [ text " Set your OpenAI API key" ]
+                , p [ class "py-4" ] [ text "You need an OpenAI API Key to use open mind UI" ]
+                , p [ class "my-2 text-xs" ] [ text "Your API Key is stored locally on your browser and never sent anywhere else." ]
                 , div [ class "input-group" ]
-                    [ input [ type_ "text", class "input input-bordered", placeholder "Your api key", onInput ApiKeyChanged, value model.apikey ] []
-                    , button [ class "btn btn-primary", onClick ApiKeySubmitted ] [ text "Submit" ]
+                    [ input
+                        [ type_ "text"
+                        , class "input input-md input-primary min-w-[80%]"
+                        , placeholder "Your api key"
+                        , onInput ApiKeyChanged
+                        , value model.apikey
+                        , placeholder "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        ]
+                        []
+                    , button [ class "btn btn-md btn-primary", onClick ApiKeySubmitted ] [ text "Submit" ]
+                    ]
+                , div [ class "my-4 text-center" ]
+                    [ a
+                        [ class "text-blue-500 text-xs hover:underline"
+                        , href "https://platform.openai.com/account/api-keys"
+                        , target "_blank"
+                        , rel "noopener noreferrer"
+                        ]
+                        [ text "→ Get your API key from Open AI dashboard." ]
                     ]
                 ]
             ]
@@ -231,5 +241,5 @@ view model =
                 [ renderChat model.messages ]
             )
         , renderChatInput model
-        , modal model
+        , viewModal model
         ]
