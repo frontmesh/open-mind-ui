@@ -1,16 +1,17 @@
 port module Main exposing (Model, Msg(..), main, update, view)
 
-import Api exposing (postCompletion)
+import Api exposing (Comp, postCompletion)
 import Browser
-import Dict exposing (update)
-import Html exposing (Html, a, button, div, footer, h1, h3, input, label, li, main_, p, span, text, textarea, ul)
+import Dict exposing (intersect, update)
+import Error exposing (buildErrorMessage)
+import Html exposing (Html, a, button, div, h1, h3, input, label, li, main_, p, span, text, textarea, ul)
 import Html.Attributes exposing (checked, class, for, href, id, placeholder, rel, target, type_, value)
 import Html.Events exposing (onClick, onInput)
-import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
+import RemoteData exposing (WebData)
 import Svg exposing (path, svg)
-import Svg.Attributes exposing (d, fill, height, strokeLinecap, strokeLinejoin, strokeWidth, viewBox, width)
+import Svg.Attributes exposing (d, fill, strokeLinecap, strokeLinejoin, strokeWidth, viewBox)
 
 
 main : Program Encode.Value Model Msg
@@ -30,8 +31,9 @@ type Msg
     | ApiKeyChanged String
     | ApiKeySubmitted
     | ToggleModal Bool
-    | SendApiKeyRequest
-    | GotCompletion (Result Http.Error String)
+    | CloseModal
+      -- | SendApiKeyRequest
+    | CompReceived (WebData Comp)
 
 
 type alias Model =
@@ -40,6 +42,7 @@ type alias Model =
     , charCount : Int
     , apikey : String
     , apiModal : Bool
+    , comps : WebData Comp
     }
 
 
@@ -70,6 +73,7 @@ initialModel =
     , charCount = 0
     , apikey = ""
     , apiModal = False
+    , comps = RemoteData.NotAsked
     }
 
 
@@ -97,16 +101,28 @@ update msg model =
                 ( model, Cmd.none )
 
             else
-                ( model, Cmd.batch [ setStorage (apiKeyEncoder model) ] )
+                let
+                    effect =
+                        postCompletion model.apikey CompReceived
+                in
+                ( { model | apiModal = True }
+                , Cmd.batch [ setStorage (apiKeyEncoder model), effect ]
+                )
 
         ToggleModal state ->
             ( { model | apiModal = state }, Cmd.none )
 
-        SendApiKeyRequest ->
-            ( model, postCompletion model.apikey )
+        CloseModal ->
+            ( { model | apiModal = False, comps = RemoteData.NotAsked }, Cmd.none )
 
-        GotCompletion (Ok response) ->
-            ( model, Cmd.none )
+        -- SendApiKeyRequest ->
+        --     let
+        --         effect =
+        --             postCompletion model.apikey CompReceived
+        --     in
+        --     ( model, effect )
+        CompReceived comps ->
+            ( { model | comps = comps }, Cmd.none )
 
 
 port setStorage : Encode.Value -> Cmd msg
@@ -121,8 +137,8 @@ renderHeaderMenuButton =
         ]
 
 
-renderHeaderMenu : Html Msg
-renderHeaderMenu =
+viewHeaderMenu : Html Msg
+viewHeaderMenu =
     div [ class "navbar bg-base-300 sticky rounded-box" ]
         [ div [ class "navbar-start" ] [ renderHeaderMenuButton ]
         , div [ class "navbar-center" ]
@@ -140,8 +156,8 @@ renderHeaderMenu =
         ]
 
 
-renderDrawer : Html Msg -> Html Msg
-renderDrawer content =
+viewDrawer : Html Msg -> Html Msg
+viewDrawer content =
     div [ class "drawer" ]
         [ input [ id "app-drawer", type_ "checkbox", class "drawer-toggle" ] []
         , div [ class "drawer-content" ]
@@ -165,8 +181,8 @@ renderDrawerMenu =
         ]
 
 
-renderChat : List String -> Html Msg
-renderChat messages =
+viewChat : List String -> Html Msg
+viewChat messages =
     let
         chatLine =
             List.map (\message -> li [ class "chat-bubble mb-4" ] [ text message ]) messages
@@ -175,8 +191,8 @@ renderChat messages =
         chatLine
 
 
-renderChatInput : Model -> Html Msg
-renderChatInput model =
+viewChatInput : Model -> Html Msg
+viewChatInput model =
     div [ class "fixed bottom-0 left-0 right-0 bg-base-100" ]
         [ div [ class "flex items-center h-full container mx-auto max-w-lg" ]
             [ textarea
@@ -197,13 +213,42 @@ renderChatInput model =
         ]
 
 
+viewFetchError : String -> Html Msg
+viewFetchError errorMessage =
+    let
+        errorHeading =
+            "Couldn't authorise your Open AI api key."
+    in
+    div []
+        [ h3 [] [ text errorHeading ]
+        , text ("Error: " ++ errorMessage)
+        ]
+
+
+viewApiKeyOutcome : WebData Comp -> Html Msg
+viewApiKeyOutcome comp =
+    case comp of
+        RemoteData.NotAsked ->
+            div [] []
+
+        RemoteData.Loading ->
+            div [] [ text "Loading..." ]
+
+        RemoteData.Success _ ->
+            div [] []
+
+        RemoteData.Failure error ->
+            viewFetchError (buildErrorMessage error)
+
+
 viewModal : Model -> Html Msg
 viewModal model =
     div []
         [ input [ type_ "checkbox", id "api-modal", class "modal-toggle", checked model.apiModal ] []
-        , label [ for "api-modal", class "modal cursor-pointer" ]
-            [ label [ class "modal-box relative", for "" ]
-                [ h3 [ class "text-lg font-bold" ] [ text " Set your OpenAI API key" ]
+        , div [ for "api-modal", class "modal cursor-pointer" ]
+            [ div [ class "modal-box relative" ]
+                [ label [ for "api-modal", class "btn btn-sm btn-circle absolute right-2 top-2", onClick CloseModal ] [ text "x" ]
+                , h3 [ class "text-lg font-bold" ] [ text " Set your OpenAI API key" ]
                 , p [ class "py-4" ] [ text "You need an OpenAI API Key to use open mind UI" ]
                 , p [ class "my-2 text-xs" ] [ text "Your API Key is stored locally on your browser and never sent anywhere else." ]
                 , div [ class "input-group" ]
@@ -218,6 +263,7 @@ viewModal model =
                         []
                     , button [ class "btn btn-md btn-primary", onClick ApiKeySubmitted ] [ text "Submit" ]
                     ]
+                , viewApiKeyOutcome model.comps
                 , div [ class "my-4 text-center" ]
                     [ a
                         [ class "text-blue-500 text-xs hover:underline"
@@ -235,11 +281,11 @@ viewModal model =
 view : Model -> Html Msg
 view model =
     main_ [ class "" ]
-        [ renderHeaderMenu
-        , renderDrawer
+        [ viewHeaderMenu
+        , viewDrawer
             (div []
-                [ renderChat model.messages ]
+                [ viewChat model.messages ]
             )
-        , renderChatInput model
+        , viewChatInput model
         , viewModal model
         ]
