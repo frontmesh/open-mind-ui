@@ -3,7 +3,7 @@ module Api exposing (..)
 -- import Json.Decode exposing (Decoder)
 
 import Http exposing (emptyBody, expectJson, request)
-import Json.Decode as Decode exposing (Decoder, int)
+import Json.Decode as Decode exposing (Decoder, string)
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
 import RemoteData exposing (WebData)
@@ -15,7 +15,7 @@ baseUrl =
 
 
 type CompId
-    = CompId Int
+    = CompId String
 
 
 type alias Comp =
@@ -89,4 +89,4 @@ compDecoder =
 
 idDecoder : Decoder CompId
 idDecoder =
-    Decode.map CompId int
+    Decode.map CompId string
